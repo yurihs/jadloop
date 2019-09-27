@@ -1,0 +1,11 @@
+[Unit]
+Description=jadloop %i every 20 minutes
+
+[Timer]
+Persistent=false
+OnCalendar=*:0/20
+Unit=jadloop@%i.service
+
+[Install]
+WantedBy=timers.target
+

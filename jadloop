@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+# Author: yurihs
+
+VERSION="1.0.0";
+BASE_DIR="$HOME/.cache/jadloop";
+
+get_info_from_api() {
+    local tracking_number="$1";
+
+    # Get HTML containing a table with the tracking info,
+    # convert it to plain text, and remove the table header.
+    local info;
+    info="$(curl -s \
+    -A "jadloop ${VERSION}" \
+    -H 'Cache-Control: no-cache' \
+    "http://www.jadlog.com.br/siteDpd/tracking_dev.jad?cte=${tracking_number}" \
+    | pandoc -f html -t plain -o - \
+    | tail -n +5)";
+
+    if [[ ! "$info" =~ "Não existem dados referentes a remessa" ]]; then
+        echo "$info";
+    else
+        echo "No data." 1>&2;
+    fi;
+}
+
+read_cached_info() {
+    local tracking_number="$1";
+    local cache_file_path;
+
+    cache_file_path="${BASE_DIR}/${tracking_number}";
+    [[ -f "${cache_file_path}" ]] && cat "${cache_file_path}";
+}
+
+write_cached_info() {
+    local tracking_number="$1";
+    local info="$2";
+    
+    echo "${info}" > "${BASE_DIR}/${tracking_number}";
+}
+
+calculate_info_added_lines() {
+    local old_info="$1";
+    local new_info="$2";
+    # Output lines that only appear in the most recent info
+    grep -Fxv -f <(echo -n "$old_info") <(echo -n "$new_info");
+}
+
+show_notification() {
+    local tracking_number="$1";
+    local info="$2";
+
+    notify-send "jadloop: update for ${tracking_number}" "${info}";
+}
+
+do_update() {
+    local tracking_number="$1";
+
+    local current_info;
+    local last_info;
+    current_info="$(get_info_from_api "$tracking_number")";
+    last_info="$(read_cached_info "${tracking_number}")";
+
+    write_cached_info "${tracking_number}" "${current_info}";
+
+    calculate_info_added_lines "${last_info}" "${current_info}";
+}
+
+do_reset() {
+    local tracking_number="$1";
+
+    local cache_file_path;
+    cache_file_path="${BASE_DIR}/${tracking_number}";
+    if [[ -f "${cache_file_path}" ]]; then
+        rm -i "${cache_file_path}";   
+    fi; 
+}
+
+print_usage() {
+    echo "Jadloop: display package tracking info from Jadlog's API.";
+    echo -e "Usage: jadloop <command> <tracking_number>\n";
+    echo "Commands:";
+    echo "   get          Display the current tracking info.";
+    echo "   get-changes  Display only new info (i.e., changes since last called).";
+    echo "   notify       Same as 'update', but also show a desktop notification.";
+    echo "   reset        Reset the cached info used by 'update' and 'notify'.";
+}
+
+main (){
+    mkdir -p "${BASE_DIR}";    
+
+    if [[ "$#" -ne 2 ]]; then
+        print_usage;
+        exit 1;
+    fi;
+
+    local mode="$1";
+    local tracking_number="$2";
+
+    case "$mode" in
+        "get")
+            get_info_from_api "$tracking_number";
+            ;;
+        "get-changes" | "notify")
+            local new_lines;
+            new_lines="$(do_update "${tracking_number}")";
+
+            if [[ -z "$new_lines" ]]; then
+                echo "Nothing new!" 1>&2;
+                return;
+            fi;
+
+            echo "$new_lines";
+
+            if [[ "$mode" = "notify" ]]; then
+                show_notification "${tracking_number}" "${new_lines}";
+            fi;
+            ;;
+        "reset")
+            do_reset "${tracking_number}";
+            ;;
+        *)
+            print_usage;
+            exit 1;
+            ;;
+    esac;
+}
+
+main "$@";
+

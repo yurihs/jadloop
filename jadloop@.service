@@ -1,0 +1,10 @@
+[Unit]
+Description=jadloop %i
+
+[Service]
+Type=simple
+ExecStart=/home/yurihs/.local/bin/jadloop notify %i
+
+[Install]
+WantedBy=default.target
+
