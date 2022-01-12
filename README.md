@@ -1,5 +1,7 @@
 # Jadloop
 
+**ARCHIVED:** Unfortunately, their public API is now protected by recaptcha.
+
 A script for displaying package tracking info from
 [Jadlog](http://www.jadlog.com.br/)'s API.
 
